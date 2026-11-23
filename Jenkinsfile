@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -36,7 +37,7 @@ pipeline {
                         )
                     ]) {
                         sh '''
-                            mvn sonar:sonar \
+                            mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4638:sonar \
                             -Dsonar.projectKey=leave-service-2024sl70021 \
                             -Dsonar.host.url=$SONAR_HOST_URL \
                             -Dsonar.token=$SONAR_TOKEN \
@@ -48,3 +49,4 @@ pipeline {
         }
     }
 }
+
