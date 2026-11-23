@@ -7,6 +7,10 @@ pipeline {
         maven 'Maven3'
     }
 
+    environment {
+        IMAGE_NAME = "leave-service:2024sl70021-${BUILD_NUMBER}"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -19,7 +23,6 @@ pipeline {
             steps {
                 sh 'mvn clean verify'
             }
-
             post {
                 always {
                     junit 'target/surefire-reports/*.xml'
@@ -37,7 +40,7 @@ pipeline {
                         )
                     ]) {
                         sh '''
-                            mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar \
+                            mvn sonar:sonar \
                             -Dsonar.projectKey=leave-service-2024sl70021 \
                             -Dsonar.host.url=$SONAR_HOST_URL \
                             -Dsonar.token=$SONAR_TOKEN \
@@ -45,6 +48,77 @@ pipeline {
                         '''
                     }
                 }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME .'
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                sh '''
+                    docker rm -f leave-service-staging || true
+
+                    docker run -d \
+                    --name leave-service-staging \
+                    -p 8085:8080 \
+                    -e APP_ENV=staging \
+                    $IMAGE_NAME
+                '''
+            }
+        }
+
+        stage('Verify Staging') {
+            steps {
+                sh '''
+                    sleep 5
+                    curl -f http://localhost:8085
+                '''
+            }
+        }
+
+        stage('Approval') {
+            steps {
+                input message: 'Approve deployment to Production?',
+                      ok: 'Approve'
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                sh '''
+                    docker rm -f leave-service-production || true
+
+                    docker run -d \
+                    --name leave-service-production \
+                    -p 8086:8080 \
+                    -e APP_ENV=production \
+                    $IMAGE_NAME
+                '''
+            }
+        }
+
+        stage('Verify Production') {
+            steps {
+                sh '''
+                    sleep 5
+                    curl -f http://localhost:8086
+                '''
+            }
+        }
+
+        stage('Verify Same Docker Image') {
+            steps {
+                sh '''
+                    docker ps --filter name=leave-service-staging \
+                    --format "{{.Names}} {{.Image}}"
+
+                    docker ps --filter name=leave-service-production \
+                    --format "{{.Names}} {{.Image}}"
+                '''
             }
         }
     }
